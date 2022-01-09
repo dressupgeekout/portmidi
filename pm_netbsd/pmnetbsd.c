@@ -16,6 +16,7 @@
 #include "portmidi.h"
 #include "pmutil.h"
 #include "pminternal.h"
+#include "pmnetbsd.h"
 
 typedef struct netbsd_info_struct {
 	char *charlotte; /* TESTING */
@@ -30,7 +31,7 @@ static PmError midi_out_close(PmInternal *midi);
 static PmError midi_out_open(PmInternal *midi, void *driverInfo);
 static unsigned int midi_check_host_error(PmInternal *midi);
 
-pm_fns_node pm_netbsd_in_dictionary = {
+pm_fns_node pm_in_dictionary = {
 	.write_short = none_write_short,
 	.begin_sysex = none_sysex,
 	.end_sysex = none_sysex,
@@ -137,18 +138,10 @@ void
 pm_init(void)
 {
 	pm_initialized = FALSE;
-	/* XXX Iterate over the MIDI input devices -- foreach, register the device w/
-	 * PortMidi */
-
-	/* Iterate over the MIDI output devices -- foreach, register the device w/
-	 * PortMidi -- for now assume there's only 1 */
-	const char *interf = "NetBSD";
-	const char *name = "NAME"; /* but the name comes from USB */
-	int is_input = 0;
-	int is_virtual = 0;
 
 	/*
-	 * Try to use drvctl to determine which MIDI devices are connected
+	 * We're going to use drvctl(4) to determine which MIDI devices are
+	 * connected.
 	 */
 	int drvctl = open("/dev/drvctl", O_RDWR);
 
@@ -157,7 +150,7 @@ pm_init(void)
 		return;
 	}
 
-	/* Figure out how many children we actually have */
+	/* Figure out how many children we actually have, first. */
 	struct devlistargs args = {
 		.l_devname = "",
 		.l_childname = NULL,
@@ -167,7 +160,8 @@ pm_init(void)
 	ioctl(drvctl, DRVLISTDEV, &args);
 
 	/*
-	 * Now we know how big to allocate our buffer of childnames.
+	 * Now we know how big to allocate our buffer of childnames. Then we can find
+	 * the list of children for real.
 	 *
 	 * XXX we assume all MIDI devices are actually USB MIDI devices :( Really
 	 * what I want is a list of all /dev/rmidi* which are currently attached.
@@ -176,22 +170,47 @@ pm_init(void)
 	args.l_childname = malloc(n_children * sizeof(args.l_childname[0]));
 	snprintf(args.l_devname, sizeof(args.l_devname), "%s", "umidi0");
 
-	/* OK now do it for real */
 	if (ioctl(drvctl, DRVLISTDEV, &args) < 0) {
 		fprintf(stderr, "ERROR in DRVLISTDEV: %s\n", strerror(errno));
 		close(drvctl);
 		return;
 	}
 
-	char real_path[PATH_MAX];
-	int fd;
+	/*
+	 * Register each device we've found w/ PortMidi.
+	 */
 
+	char real_path[PATH_MAX];
+	int in_fd;
+	int out_fd;
+
+	/* XXX Assume all devices are ok for in AND out. */
+	// XXX the PortMidi `name` should be like what you find from USB HID
+	/* The first device we see is the 'default'. */
 	for (int i = 0; i < args.l_children; i++) {
+		memset(real_path, 0, sizeof(real_path));
 		snprintf(real_path, sizeof(real_path), "/dev/r%s", args.l_childname[i]);
-		fd = open(real_path, O_WRONLY);
-		pm_add_device((char *)interf, name, is_input, is_virtual, (void *)(intptr_t)fd, &pm_out_dictionary);
+		in_fd = open(real_path, O_RDONLY);
+		pm_add_device("NetBSD", args.l_childname[i], 1, 0, (void *)(intptr_t)in_fd, &pm_in_dictionary);
+
+		if (pm_default_input_device_id == -1) {
+			pm_default_input_device_id = i;
+		}
 	}
 
+	for (int i = 0; i < args.l_children; i++) {
+		memset(real_path, 0, sizeof(real_path));
+		snprintf(real_path, sizeof(real_path), "/dev/r%s", args.l_childname[i]);
+		out_fd = open(real_path, O_WRONLY);
+		pm_add_device("NetBSD", args.l_childname[i], 0, 0, (void *)(intptr_t)out_fd, &pm_out_dictionary);
+
+		if (pm_default_output_device_id == -1) {
+			pm_default_output_device_id = i;
+		}
+	}
+
+
+	free(args.l_childname);
 	close(drvctl);
 	pm_initialized = TRUE;
 }
