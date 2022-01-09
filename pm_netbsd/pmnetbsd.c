@@ -18,6 +18,9 @@
 #include "pminternal.h"
 #include "pmnetbsd.h"
 
+PmDeviceID pm_default_input_device_id = -1;
+PmDeviceID pm_default_output_device_id = -1;
+
 typedef struct netbsd_info_struct {
 	char *charlotte; /* TESTING */
 } netbsd_info_node, *netbsd_info_type;
@@ -58,6 +61,22 @@ pm_fns_node pm_out_dictionary = {
 	.poll = none_poll,
 	.check_host_error = midi_check_host_error
 };
+
+/* ********** */
+
+PmDeviceID
+Pm_GetDefaultInputDeviceID()
+{
+    Pm_Initialize();
+    return pm_default_input_device_id;
+}
+
+PmDeviceID
+Pm_GetDefaultOutputDeviceID()
+{
+    Pm_Initialize();
+    return pm_default_output_device_id;
+}
 
 /* ********** */
 
@@ -187,28 +206,30 @@ pm_init(void)
 	/* XXX Assume all devices are ok for in AND out. */
 	// XXX the PortMidi `name` should be like what you find from USB HID
 	/* The first device we see is the 'default'. */
+
+	/* Input devices */
 	for (int i = 0; i < args.l_children; i++) {
 		memset(real_path, 0, sizeof(real_path));
 		snprintf(real_path, sizeof(real_path), "/dev/r%s", args.l_childname[i]);
 		in_fd = open(real_path, O_RDONLY);
-		pm_add_device("NetBSD", args.l_childname[i], 1, 0, (void *)(intptr_t)in_fd, &pm_in_dictionary);
+		PmDeviceID id = pm_add_device("NetBSD", args.l_childname[i], 1, 0, (void *)(intptr_t)in_fd, &pm_in_dictionary);
 
 		if (pm_default_input_device_id == -1) {
-			pm_default_input_device_id = i;
+			pm_default_input_device_id = id;
 		}
 	}
 
+	/* Output devices */
 	for (int i = 0; i < args.l_children; i++) {
 		memset(real_path, 0, sizeof(real_path));
 		snprintf(real_path, sizeof(real_path), "/dev/r%s", args.l_childname[i]);
 		out_fd = open(real_path, O_WRONLY);
-		pm_add_device("NetBSD", args.l_childname[i], 0, 0, (void *)(intptr_t)out_fd, &pm_out_dictionary);
+		PmDeviceID id = pm_add_device("NetBSD", args.l_childname[i], 0, 0, (void *)(intptr_t)out_fd, &pm_out_dictionary);
 
 		if (pm_default_output_device_id == -1) {
-			pm_default_output_device_id = i;
+			pm_default_output_device_id = id;
 		}
 	}
-
 
 	free(args.l_childname);
 	close(drvctl);
