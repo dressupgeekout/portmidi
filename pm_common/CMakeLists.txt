@@ -121,6 +121,7 @@ elseif(UNIX)
   if(${CMAKE_SYSTEM_NAME} STREQUAL "NetBSD")
     target_compile_definitions(portmidi PRIVATE ${NETBSD_FLAGS})
     set(PM_LIB_PRIVATE_SRC
+      ${PMDIR}/porttime/ptnetbsd.c
       ${PMDIR}/pm_netbsd/pmnetbsd.c)
   endif()
 elseif(WIN32)
