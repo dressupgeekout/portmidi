@@ -211,7 +211,7 @@ pm_init(void)
 	for (int i = 0; i < args.l_children; i++) {
 		memset(real_path, 0, sizeof(real_path));
 		snprintf(real_path, sizeof(real_path), "/dev/r%s", args.l_childname[i]);
-		in_fd = open(real_path, O_RDONLY);
+		in_fd = open(real_path, O_RDONLY); // XXX check for error
 		PmDeviceID id = pm_add_device("NetBSD", args.l_childname[i], 1, 0, (void *)(intptr_t)in_fd, &pm_in_dictionary);
 
 		if (pm_default_input_device_id == -1) {
@@ -223,7 +223,7 @@ pm_init(void)
 	for (int i = 0; i < args.l_children; i++) {
 		memset(real_path, 0, sizeof(real_path));
 		snprintf(real_path, sizeof(real_path), "/dev/r%s", args.l_childname[i]);
-		out_fd = open(real_path, O_WRONLY);
+		out_fd = open(real_path, O_WRONLY); // XXX check for error
 		PmDeviceID id = pm_add_device("NetBSD", args.l_childname[i], 0, 0, (void *)(intptr_t)out_fd, &pm_out_dictionary);
 
 		if (pm_default_output_device_id == -1) {
