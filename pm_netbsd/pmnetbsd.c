@@ -1,11 +1,16 @@
 /* pmnetbsd.c -- PortMidi os-dependent code */
 
-
+#include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
+#include <sys/drvctlio.h>
+#include <sys/ioctl.h>
 #include <sys/midiio.h>
 
 #include "portmidi.h"
@@ -131,18 +136,63 @@ pm_free(void *ptr)
 void
 pm_init(void)
 {
+	pm_initialized = FALSE;
 	/* XXX Iterate over the MIDI input devices -- foreach, register the device w/
 	 * PortMidi */
 
 	/* Iterate over the MIDI output devices -- foreach, register the device w/
 	 * PortMidi -- for now assume there's only 1 */
 	const char *interf = "NetBSD";
-	const char *name = "NAME";
+	const char *name = "NAME"; /* but the name comes from USB */
 	int is_input = 0;
 	int is_virtual = 0;
-	int fd = open("/dev/midi1", O_WRONLY);
-	pm_add_device((char *)interf, name, is_input, is_virtual, (void *)(intptr_t)fd, &pm_out_dictionary);
 
+	/*
+	 * Try to use drvctl to determine which MIDI devices are connected
+	 */
+	int drvctl = open("/dev/drvctl", O_RDWR);
+
+	if (drvctl < 0) {
+		fprintf(stderr, "ERROR opening /dev/drvctl: %s\n", strerror(errno));
+		return;
+	}
+
+	/* Figure out how many children we actually have */
+	struct devlistargs args = {
+		.l_devname = "",
+		.l_childname = NULL,
+		.l_children = 0
+	};
+
+	ioctl(drvctl, DRVLISTDEV, &args);
+
+	/*
+	 * Now we know how big to allocate our buffer of childnames.
+	 *
+	 * XXX we assume all MIDI devices are actually USB MIDI devices :( Really
+	 * what I want is a list of all /dev/rmidi* which are currently attached.
+	 */
+	size_t n_children = args.l_children;
+	args.l_childname = malloc(n_children * sizeof(args.l_childname[0]));
+	snprintf(args.l_devname, sizeof(args.l_devname), "%s", "umidi0");
+
+	/* OK now do it for real */
+	if (ioctl(drvctl, DRVLISTDEV, &args) < 0) {
+		fprintf(stderr, "ERROR in DRVLISTDEV: %s\n", strerror(errno));
+		close(drvctl);
+		return;
+	}
+
+	char real_path[PATH_MAX];
+	int fd;
+
+	for (int i = 0; i < args.l_children; i++) {
+		snprintf(real_path, sizeof(real_path), "/dev/r%s", args.l_childname[i]);
+		fd = open(real_path, O_WRONLY);
+		pm_add_device((char *)interf, name, is_input, is_virtual, (void *)(intptr_t)fd, &pm_out_dictionary);
+	}
+
+	close(drvctl);
 	pm_initialized = TRUE;
 }
 
