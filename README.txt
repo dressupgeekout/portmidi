@@ -10,6 +10,7 @@ Additional documentation:
   - Windows: see pm_win/README_WIN.txt and pm_win/debugging_dlls.txt
   - Linux: see pm_linux/README_LINUX.txt
   - Mac OSX: see pm_mac/README_MAC.txt
+  - NetBSD: see pm_netbsd/README_NETBSD.txt
   - Other Languages: look for other repos at github.com/PortMidi,
         and search README.md for pointers to other projects.
 

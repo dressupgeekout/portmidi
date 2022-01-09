@@ -95,25 +95,33 @@ if(UNIX AND APPLE)
   # set to CMake default; is this right?:
   set_target_properties(portmidi PROPERTIES MACOSX_RPATH ON)
 elseif(UNIX)
-  target_compile_definitions(portmidi PRIVATE ${LINUX_FLAGS})
-  set(PM_LIB_PRIVATE_SRC
-      ${PMDIR}/porttime/ptlinux.c
-      ${PMDIR}/pm_linux/pmlinux.c
-      ${PMDIR}/pm_linux/pmlinuxnull.c
-      ${PMDIR}/pm_linux/finddefault.c)
-  if(${LINUX_DEFINES} MATCHES ".*PMALSA.*")
-    # Note that ALSA is not required if PMNULL is defined -- PortMidi will then
-    # compile without ALSA and report no MIDI devices. Later, PMSNDIO or PMJACK
-    # might be additional options.
-    find_package(ALSA REQUIRED)
-    list(APPEND PM_LIB_PRIVATE_SRC ${PMDIR}/pm_linux/pmlinuxalsa.c)
-    set(PM_NEEDED_LIBS ${CMAKE_THREAD_LIBS_INIT} ${ALSA_LIBRARIES} PARENT_SCOPE)
-    target_link_libraries(portmidi PRIVATE Threads::Threads ALSA::ALSA)
-  else()
-    message(WARNING "No PMALSA, so PortMidi will not use ALSA, "
-                    "and will not find or open MIDI devices.")
-    set(PM_NEEDED_LIBS ${CMAKE_THREAD_LIBS_INIT} PARENT_SCOPE)
-    target_link_libraries(portmidi PRIVATE Threads::Threads)
+  if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+    target_compile_definitions(portmidi PRIVATE ${LINUX_FLAGS})
+    set(PM_LIB_PRIVATE_SRC
+        ${PMDIR}/porttime/ptlinux.c
+        ${PMDIR}/pm_linux/pmlinux.c
+        ${PMDIR}/pm_linux/pmlinuxnull.c
+        ${PMDIR}/pm_linux/finddefault.c)
+    if(${LINUX_DEFINES} MATCHES ".*PMALSA.*")
+      # Note that ALSA is not required if PMNULL is defined -- PortMidi will then
+      # compile without ALSA and report no MIDI devices. Later, PMSNDIO or PMJACK
+      # might be additional options.
+      find_package(ALSA REQUIRED)
+      list(APPEND PM_LIB_PRIVATE_SRC ${PMDIR}/pm_linux/pmlinuxalsa.c)
+      set(PM_NEEDED_LIBS ${CMAKE_THREAD_LIBS_INIT} ${ALSA_LIBRARIES} PARENT_SCOPE)
+      target_link_libraries(portmidi PRIVATE Threads::Threads ALSA::ALSA)
+    else()
+      message(WARNING "No PMALSA, so PortMidi will not use ALSA, "
+                      "and will not find or open MIDI devices.")
+      set(PM_NEEDED_LIBS ${CMAKE_THREAD_LIBS_INIT} PARENT_SCOPE)
+      target_link_libraries(portmidi PRIVATE Threads::Threads)
+    endif()
+  endif()
+
+  if(${CMAKE_SYSTEM_NAME} STREQUAL "NetBSD")
+    target_compile_definitions(portmidi PRIVATE ${NETBSD_FLAGS})
+    set(PM_LIB_PRIVATE_SRC
+      ${PMDIR}/pm_netbsd/pmnetbsd.c)
   endif()
 elseif(WIN32)
   set(PM_LIB_PRIVATE_SRC
